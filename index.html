@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0a0c10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>羊毛账本</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#0a0c10;color:#e2e6f0;font:15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC",
+"Microsoft YaHei",sans-serif;max-width:430px;margin:0 auto;padding:18px 16px 40px;padding-top:max(18px,env(safe-area-inset-top))}
+h1{font-size:21px;font-weight:800;letter-spacing:.5px}
+.sub{font-size:11.5px;color:#4b5266;margin:5px 0 18px}
+h3{font-size:13px;color:#7d8699;font-weight:700;margin:20px 0 10px}
+.card{background:#12151d;border:1px solid #202633;border-radius:14px;padding:14px 15px;margin-bottom:13px}
+.stat{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;font-size:13px;color:#7d8699}
+.stat b{font-size:16px;color:#e2e6f0;font-variant-numeric:tabular-nums}
+.stat b.g{color:#19c07a}
+.stat b.r{color:#ff6b7d}
+.stat.big b{font-size:23px}
+.in{width:100%;background:#0a0c10;border:1px solid #2a3448;border-radius:10px;color:#e2e6f0;
+padding:12px 13px;font-size:15px;font-family:inherit;margin-bottom:10px;outline:none}
+.in:focus{border-color:#2f6bff}
+.row{display:flex;gap:10px}
+.row .in{margin-bottom:10px}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px;color:#7d8699;margin:2px 0 12px}
+.chk input{width:18px;height:18px;accent-color:#19c07a}
+.btn{width:100%;padding:13px;border-radius:11px;border:none;background:#2f6bff;color:#fff;
+font-size:15px;font-weight:700;font-family:inherit;cursor:pointer}
+.btn:active{opacity:.8}
+.item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;
+border-bottom:1px solid #181c26}
+.item:last-child{border-bottom:none}
+.il{display:flex;align-items:center;gap:7px;min-width:0;flex:1}
+.date{font-size:10.5px;color:#4b5266;font-variant-numeric:tabular-nums;white-space:nowrap}
+.name{font-size:13px;font-weight:600;color:#e2e6f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{font-size:9.5px;border-radius:4px;padding:1px 5px;white-space:nowrap}
+.tag.y{color:#19c07a;background:#0b1710}
+.tag.n{color:#5f6779;background:#141820}
+.ir{display:flex;align-items:center;gap:8px;white-space:nowrap}
+.ir b{font-size:13px;font-variant-numeric:tabular-nums}
+.ir b.g{color:#19c07a}
+.rate{font-size:10px;color:#4b5266;font-variant-numeric:tabular-nums}
+.del{font-size:11px;color:#5c3a3a;padding:4px 7px;cursor:pointer}
+.empty{text-align:center;color:#3d4352;font-size:13px;padding:28px 0}
+.tip{font-size:11px;color:#3d4352;line-height:1.9;margin-top:14px}
+.tip b{color:#5f6779}
+.ver{font-size:10px;color:#2a2f3a;text-align:center;margin-top:22px}
+</style>
+</head>
+<body>
+
+<h1>羊毛账本</h1>
+<div class="sub" id="sub">只记真实到账的钱</div>
+
+<div class="card" id="stats"></div>
+
+<div class="card">
+  <input id="app" class="in" placeholder="App 名字（抖音极速版…）" autocomplete="off">
+  <div class="row">
+    <input id="hrs" class="in" type="number" step="0.1" inputmode="decimal" placeholder="时长(小时)">
+    <input id="amt" class="in" type="number" step="0.01" inputmode="decimal" placeholder="赚了多少元">
+  </div>
+  <label class="chk"><input id="got" type="checkbox"> 已经提现到账</label>
+  <button class="btn" onclick="add()">＋ 添加记录</button>
+</div>
+
+<h3>最近记录</h3>
+<div id="list"></div>
+
+<div class="tip">
+  📌 <b>只记真实到账的钱</b>，金币没提出来不算<br>
+  📌 时薪低于 5 元/小时 → 这个 App 不值得再刷<br>
+  📌 单价掉到 0.2 元/条以下 → 停一天，账号质量分会掉<br>
+  📌 能提就立刻提，余额攒着容易被门槛卡住
+</div>
+
+<div class="ver">v1.0 · 数据只存这台手机</div>
+
+<script>
+const KEY = "wool_log_v1";
+let LOG = [];
+
+function load() {
+  try {
+    LOG = JSON.parse(localStorage.getItem(KEY) || "[]");
+    if (!Array.isArray(LOG)) LOG = [];
+  } catch (e) { LOG = []; }
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(LOG)); } catch (e) {}
+}
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + "-" +
+    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+    String(d.getDate()).padStart(2, "0");
+}
+function fmt(n, d) { return (Math.round(n * 100) / 100).toFixed(d === undefined ? 2 : d); }
+
+function add() {
+  const app = document.getElementById("app").value.trim();
+  const hrs = parseFloat(document.getElementById("hrs").value);
+  const amt = parseFloat(document.getElementById("amt").value);
+  const got = document.getElementById("got").checked;
+
+  if (!app) { alert("填一下 App 名字"); return; }
+  if (!isFinite(hrs) || hrs <= 0) { alert("填观看时长（小时）\n比如刷了 2 小时就填 2"); return; }
+  if (!isFinite(amt) || amt < 0) { alert("填当天赚了多少元"); return; }
+
+  LOG.push({ date: todayStr(), app: app, hrs: hrs, amt: amt, got: !!got, t: Date.now() });
+  save();
+  document.getElementById("app").value = "";
+  document.getElementById("hrs").value = "";
+  document.getElementById("amt").value = "";
+  document.getElementById("got").checked = false;
+  render();
+  document.getElementById("app").focus();
+}
+
+function del(i) {
+  if (!confirm("删除这条记录？")) return;
+  LOG.splice(i, 1);
+  save();
+  render();
+}
+
+function render() {
+  load();
+  const ym = todayStr().slice(0, 7);
+  const td = todayStr();
+
+  let mAmt = 0, mHrs = 0, tAmt = 0, tHrs = 0, cash = 0, allAmt = 0, allHrs = 0;
+  LOG.forEach(w => {
+    const h = +w.hrs || 0, a = +w.amt || 0;
+    allAmt += a; allHrs += h;
+    if (String(w.date).indexOf(ym) === 0) { mAmt += a; mHrs += h; }
+    if (w.date === td) { tAmt += a; tHrs += h; }
+    if (w.got) cash += a;
+  });
+
+  const rate = mHrs > 0 ? mAmt / mHrs : 0;
+  document.getElementById("stats").innerHTML =
+    '<div class="stat big"><span>本月累计</span><b class="g">' + fmt(mAmt) + ' 元</b></div>' +
+    '<div class="stat"><span>今日</span><b>' + fmt(tAmt) + ' 元 ' +
+      (tHrs > 0 ? '<span style="font-size:11px;color:#4b5266">' + fmt(tHrs, 1) + 'h</span>' : '') + '</b></div>' +
+    '<div class="stat"><span>本月耗时</span><b>' + fmt(mHrs, 1) + ' 小时</b></div>' +
+    '<div class="stat"><span>真实时薪</span><b class="' + (rate >= 5 ? 'g' : 'r') + '">' +
+      (mHrs > 0 ? fmt(rate) : '—') + ' 元/小时</b></div>' +
+    '<div class="stat"><span>已提现到账</span><b class="g">' + fmt(cash) + ' 元</b></div>' +
+    '<div class="stat" style="border-top:1px solid #181c26;margin-top:6px;padding-top:10px">' +
+      '<span>历史总计</span><b style="font-size:14px">' + fmt(allAmt) + ' 元 / ' +
+      fmt(allHrs, 1) + 'h</b></div>';
+
+  const list = LOG.slice().reverse();
+  const box = document.getElementById("list");
+  if (!list.length) {
+    box.innerHTML = '<div class="card"><div class="empty">还没有记录<br>刷完一天，上来记一笔</div></div>';
+    return;
+  }
+  let h = '<div class="card">';
+  list.slice(0, 60).forEach(w => {
+    const idx = LOG.indexOf(w);
+    const r = w.hrs > 0 ? w.amt / w.hrs : 0;
+    h += '<div class="item">' +
+      '<div class="il"><span class="date">' + String(w.date).slice(5) + '</span>' +
+      '<span class="name">' + escapeHtml(w.app) + '</span>' +
+      (w.got ? '<span class="tag y">到账</span>' : '<span class="tag n">未提</span>') + '</div>' +
+      '<div class="ir"><b class="' + (w.got ? 'g' : '') + '">' + fmt(w.amt) + '元</b>' +
+      '<span class="rate">' + fmt(w.hrs, 1) + 'h·' + fmt(r, 1) + '</span>' +
+      '<span class="del" onclick="del(' + idx + ')">删</span></div></div>';
+  });
+  h += '</div>';
+  box.innerHTML = h;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+document.getElementById("sub").textContent = "只记真实到账的钱 · " +
+  new Date().toLocaleDateString("zh-CN");
+render();
+document.getElementById("app").addEventListener("keydown", e => {
+  if (e.key === "Enter") document.getElementById("hrs").focus();
+});
+</script>
+</body>
+</html>
