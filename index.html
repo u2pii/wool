@@ -44,7 +44,10 @@ border-bottom:1px solid #181c26}
 .ir b{font-size:13px;font-variant-numeric:tabular-nums}
 .ir b.g{color:#19c07a}
 .rate{font-size:10px;color:#4b5266;font-variant-numeric:tabular-nums}
-.del{font-size:11px;color:#5c3a3a;padding:4px 7px;cursor:pointer}
+.del{font-size:12px;color:#6b4a4a;padding:10px 11px;cursor:pointer;border-radius:8px;
+background:#161018;border:1px solid #2a1c22;min-width:44px;text-align:center;user-select:none}
+.del.arm{background:#3a1418;color:#ff9aa6;border-color:#5c2028;font-weight:700}
+.item{position:relative}
 .empty{text-align:center;color:#3d4352;font-size:13px;padding:28px 0}
 .tip{font-size:11px;color:#3d4352;line-height:1.9;margin-top:14px}
 .tip b{color:#5f6779}
@@ -71,6 +74,9 @@ border-bottom:1px solid #181c26}
 <h3>最近记录</h3>
 <div id="list"></div>
 
+<div style="margin-top:16px"><button class="btn" id="clr" onclick="clearAll()"
+  style="background:#1a0f11;color:#ff9aa6;border:1px solid #5c2028">清空全部记录</button></div>
+
 <div class="tip">
   📌 <b>只记真实到账的钱</b>，金币没提出来不算<br>
   📌 时薪低于 5 元/小时 → 这个 App 不值得再刷<br>
@@ -78,7 +84,7 @@ border-bottom:1px solid #181c26}
   📌 能提就立刻提，余额攒着容易被门槛卡住
 </div>
 
-<div class="ver">v1.0 · 数据只存这台手机</div>
+<div class="ver">v1.1 · 数据只存这台手机</div>
 
 <script>
 const KEY = "wool_log_v1";
@@ -121,10 +127,21 @@ function add() {
   document.getElementById("app").focus();
 }
 
+let _arm = -1, _armTimer = null;
+
 function del(i) {
-  if (!confirm("删除这条记录？")) return;
-  LOG.splice(i, 1);
-  save();
+  // 第一下：标记待删（3 秒内再点一次才真删）
+  if (_arm === i) {
+    clearTimeout(_armTimer);
+    _arm = -1; _armTimer = null;
+    LOG.splice(i, 1);
+    save();
+    render();
+    return;
+  }
+  _arm = i;
+  clearTimeout(_armTimer);
+  _armTimer = setTimeout(function () { _arm = -1; render(); }, 3000);
   render();
 }
 
@@ -171,10 +188,31 @@ function render() {
       (w.got ? '<span class="tag y">到账</span>' : '<span class="tag n">未提</span>') + '</div>' +
       '<div class="ir"><b class="' + (w.got ? 'g' : '') + '">' + fmt(w.amt) + '元</b>' +
       '<span class="rate">' + fmt(w.hrs, 1) + 'h·' + fmt(r, 1) + '</span>' +
-      '<span class="del" onclick="del(' + idx + ')">删</span></div></div>';
+      '<span class="del' + (_arm === idx ? ' arm' : '') + '" onclick="del(' + idx + ')">' +
+      (_arm === idx ? '确认?' : '删') + '</span></div></div>';
   });
   h += '</div>';
   box.innerHTML = h;
+}
+
+let _armClr = false, _armClrTimer = null;
+
+function clearAll() {
+  const btn = document.getElementById("clr");
+  if (_armClr) {
+    clearTimeout(_armClrTimer);
+    _armClr = false;
+    LOG = [];
+    save();
+    render();
+    return;
+  }
+  _armClr = true;
+  btn.textContent = "再点一次确认清空（3 秒）";
+  _armClrTimer = setTimeout(function () {
+    _armClr = false;
+    btn.textContent = "清空全部记录";
+  }, 3000);
 }
 
 function escapeHtml(s) {
